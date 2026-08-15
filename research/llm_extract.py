@@ -60,7 +60,12 @@ def call_llm(prompt: str) -> str:
     return "".join(block.text for block in resp.content if block.type == "text")
 
 
+MAX_SEARCH_TEXT_CHARS = 3000  # keeps total prompt well under Groq's 6000 TPM budget
+
 def extract_research_findings(company_name: str, icp_summary: str, raw_search_text: str) -> dict:
+    if len(raw_search_text) > MAX_SEARCH_TEXT_CHARS:
+        raw_search_text = raw_search_text[:MAX_SEARCH_TEXT_CHARS] + "\n[...truncated for length]"
+
     prompt = (
         f"Company: {company_name}\n"
         f"ICP context: {icp_summary}\n\n"

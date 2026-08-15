@@ -24,7 +24,7 @@ class DiscoveryRequest(BaseModel):
     target_industry: str
     company_size: str | None = None
     special_focus: str | None = None
-    max_results_per_query: int = 8
+    max_results_per_query: int = 3
 
 
 @router.get("/health")

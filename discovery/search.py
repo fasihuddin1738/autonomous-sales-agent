@@ -48,7 +48,7 @@ def discover_leads(icp: ICP, max_results_per_query: int = 5) -> list[Lead]:
     return leads
 
 
-def discover_leads_with_raw(icp: ICP, max_results_per_query: int = 8) -> tuple[list[Lead], list[dict]]:
+def discover_leads_with_raw(icp: ICP, max_results_per_query: int = 3) -> tuple[list[Lead], list[dict]]:
     """
     Same as discover_leads, but also returns the raw Tavily results
     (with content) so directory/listicle pages can be mined for
