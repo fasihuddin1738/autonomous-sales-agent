@@ -1,5 +1,4 @@
-'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import './index.css';
 import GridBackground from './components/GridBackground';
@@ -35,6 +34,8 @@ export default function App() {
   const [logs, setLogs] = useState<AgentLogEntry[]>([]);
   const [showNegative, setShowNegative] = useState(false);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const log = useCallback((msg: string) => {
     setLogs(prev => addLog(prev, msg));
     setAgentStatus(msg);
@@ -54,6 +55,17 @@ export default function App() {
     fetchLeads();
   }, [fetchLeads]);
 
+  // Stop running pipeline
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+    log('Pipeline execution stopped by user.');
+    setAgentStatus('Idle — pipeline stopped');
+  };
+
   // Seed mock data
   const handleSeedData = async () => {
     log('Seeding mock leads into database...');
@@ -71,21 +83,33 @@ export default function App() {
 
   // Full autonomous pipeline
   const handleLaunch = async () => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setLoading(true);
     log(`Launching autonomous pipeline — ${icp.target_industry} in ${icp.target_location}...`);
     try {
       log('Step 1/2: Discovering leads via NexaFlow discovery engine...');
-      const discovered = await api.discoverLeads({ ...icp, max_results_per_query: 5 });
+      const discovered = await api.discoverLeads(
+        { ...icp, max_results_per_query: 5 },
+        controller.signal
+      );
       log(`Found ${discovered.count} raw leads. Starting deep research & qualification...`);
 
       log('Step 2/2: Processing batch: research → qualify → service match → decision-maker ID...');
-      const processed = await api.processBatch(discovered.leads, icp);
+      const processed = await api.processBatch(discovered.leads, icp, controller.signal);
       log(`Pipeline complete. ${processed.qualified}/${processed.processed} leads qualified.`);
 
       await fetchLeads();
-    } catch (e) {
-      log(`Pipeline error: ${(e as Error).message}`);
+    } catch (e: any) {
+      if (e?.name === 'AbortError' || controller.signal.aborted) {
+        log('Pipeline cancelled.');
+      } else {
+        log(`Pipeline error: ${e?.message || e}`);
+      }
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setLoading(false);
     }
   };
@@ -104,6 +128,11 @@ export default function App() {
 
   // Reset
   const handleReset = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
     setLeads([]);
     setLogs([]);
     setAgentStatus('Idle — session reset');
@@ -119,17 +148,29 @@ export default function App() {
 
   // ICP scan
   const handleICPScan = async () => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setLoading(true);
     log(`Updating ICP and scanning for leads: ${icp.target_industry}, ${icp.target_location}...`);
     try {
-      const discovered = await api.discoverLeads({ ...icp, max_results_per_query: 3 });
+      const discovered = await api.discoverLeads(
+        { ...icp, max_results_per_query: 3 },
+        controller.signal
+      );
       log(`Discovered ${discovered.count} leads. Running research batch...`);
-      const processed = await api.processBatch(discovered.leads, icp);
+      const processed = await api.processBatch(discovered.leads, icp, controller.signal);
       log(`ICP scan complete: ${processed.qualified}/${processed.processed} qualified.`);
       await fetchLeads();
-    } catch (e) {
-      log(`ICP scan failed: ${(e as Error).message}`);
+    } catch (e: any) {
+      if (e?.name === 'AbortError' || controller.signal.aborted) {
+        log('ICP scan cancelled.');
+      } else {
+        log(`ICP scan failed: ${e?.message || e}`);
+      }
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setLoading(false);
     }
   };
@@ -148,6 +189,7 @@ export default function App() {
           onToggleMock={() => setMockMode(m => !m)}
           onToggleDryRun={() => setDryRun(d => !d)}
           onLaunch={handleLaunch}
+          onStop={handleStop}
           onScanFollowUps={handleScanFollowUps}
           onSeedData={handleSeedData}
           onReset={handleReset}

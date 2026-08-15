@@ -18,16 +18,18 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // ── Discovery ────────────────────────────────────────────────────────────────
-export const discoverLeads = (icp: ICP & { max_results_per_query?: number }) =>
+export const discoverLeads = (icp: ICP & { max_results_per_query?: number }, signal?: AbortSignal) =>
   req<{ count: number; leads: Lead[] }>('/discovery/discover', {
     method: 'POST',
     body: JSON.stringify(icp),
+    signal,
   });
 
-export const processBatch = (leads: Lead[], icp: ICP) =>
+export const processBatch = (leads: Lead[], icp: ICP, signal?: AbortSignal) =>
   req<{ processed: number; qualified: number; leads: Lead[] }>('/research/process-batch', {
     method: 'POST',
     body: JSON.stringify({ leads, icp }),
+    signal,
   });
 
 // ── Leads ────────────────────────────────────────────────────────────────────

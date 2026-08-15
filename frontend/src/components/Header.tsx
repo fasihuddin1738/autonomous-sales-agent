@@ -2,7 +2,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   RocketLaunch, ArrowsClockwise, Flask, ArrowCounterClockwise,
-  CircleDashed,
+  Stop,
 } from '@phosphor-icons/react';
 
 interface HeaderProps {
@@ -12,6 +12,7 @@ interface HeaderProps {
   onToggleMock: () => void;
   onToggleDryRun: () => void;
   onLaunch: () => void;
+  onStop: () => void;
   onScanFollowUps: () => void;
   onSeedData: () => void;
   onReset: () => void;
@@ -21,7 +22,7 @@ interface HeaderProps {
 export default function Header({
   agentStatus, mockMode, dryRun,
   onToggleMock, onToggleDryRun,
-  onLaunch, onScanFollowUps, onSeedData, onReset,
+  onLaunch, onStop, onScanFollowUps, onSeedData, onReset,
   loading,
 }: HeaderProps) {
   return (
@@ -57,17 +58,32 @@ export default function Header({
 
           {/* Action buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              className="btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5"
-              onClick={onLaunch}
-              disabled={loading}
-              id="btn-launch-pipeline"
-            >
-              {loading
-                ? <CircleDashed size={13} className="animate-spin" />
-                : <RocketLaunch size={13} weight="fill" />}
-              Launch Pipeline
-            </button>
+            {loading ? (
+              <button
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer"
+                style={{
+                  background: 'rgba(244,63,94,0.18)',
+                  color: '#f43f5e',
+                  border: '1px solid rgba(244,63,94,0.45)',
+                  boxShadow: '0 0 10px rgba(244,63,94,0.2)',
+                }}
+                onClick={onStop}
+                id="btn-stop-pipeline"
+                title="Stop current pipeline process"
+              >
+                <Stop size={13} weight="fill" />
+                Stop Pipeline
+              </button>
+            ) : (
+              <button
+                className="btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5"
+                onClick={onLaunch}
+                id="btn-launch-pipeline"
+              >
+                <RocketLaunch size={13} weight="fill" />
+                Launch Pipeline
+              </button>
+            )}
             <button
               className="btn-ghost flex items-center gap-1.5 text-xs px-3 py-1.5"
               onClick={onScanFollowUps}
