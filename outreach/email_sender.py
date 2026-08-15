@@ -77,14 +77,12 @@ def send_email(lead: Lead, message: OutreachMessage, dry_run: bool = False) -> O
     """
     if message not in lead.outreach:
         lead.outreach.append(message)
-
-    if not message.contact.email:
-        raise EmailSendError(f"No email address on file for contact {message.contact.role}.")
-
     has_sender = bool(settings.GMAIL_USER and settings.GMAIL_APP_PASSWORD) or bool(settings.RESEND_API_KEY)
     if dry_run or not has_sender:
         message_id = "dry-run"
     else:
+        if not message.contact.email:
+            raise EmailSendError(f"No email address on file for contact {message.contact.role}.")
         message_id = _send_email_real(message.contact.email, message.subject, message.body)
 
     message.status = OutreachStatus.SENT
