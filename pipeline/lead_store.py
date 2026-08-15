@@ -12,6 +12,10 @@ from typing import Optional
 
 from shared.schema import Lead
 
+def _normalize_name(name: str) -> str:
+    """Lowercase + strip, so 'Tabani Real Estate' and 'tabani real estate ' match."""
+    return name.strip().lower()
+
 DB_PATH = "nexaflow_leads.db"
 
 
@@ -43,6 +47,10 @@ class LeadStore:
             )
 
     def save(self, lead: Lead) -> None:
+        existing = self.find_by_company_name(lead.company_name)
+        if existing and existing.id != lead.id:
+            lead.id = existing.id  # reuse the existing record instead of duplicating
+
         with self._conn() as conn:
             conn.execute(
                 """
@@ -60,6 +68,16 @@ class LeadStore:
         with self._conn() as conn:
             row = conn.execute("SELECT data FROM leads WHERE id = ?", (lead_id,)).fetchone()
         return Lead.model_validate_json(row[0]) if row else None
+
+    def find_by_company_name(self, company_name: str) -> Optional[Lead]:
+        normalized = _normalize_name(company_name)
+        with self._conn() as conn:
+            rows = conn.execute("SELECT data FROM leads").fetchall()
+        for row in rows:
+            lead = Lead.model_validate_json(row[0])
+            if _normalize_name(lead.company_name) == normalized:
+                return lead
+        return None
 
     def all(self) -> list[Lead]:
         with self._conn() as conn:

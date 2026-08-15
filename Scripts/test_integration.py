@@ -25,7 +25,7 @@ from qualification.qualification import (
     match_service,
     identify_decision_makers,
 )
-from rag.retrieve import retrieve_context
+from rag.retrieve import retrieve_context, answer_from_context
 from pipeline.lead_store import lead_store
 
 LEAD_LIMIT = 3  # keep small for a fast, cheap first integration run
@@ -57,7 +57,7 @@ def main():
         print(f"  Score: {lead.qualification.score}/100 — {'QUALIFIED' if lead.qualification.is_qualified else 'NOT QUALIFIED'}")
 
         print("Step 4: Service matching (grounded via RAG)...")
-        lead.recommended_service = match_service(lead, rag_lookup=lambda q: "\n".join(retrieve_context(q, top_k=3)))
+        lead.recommended_service = match_service(lead, rag_lookup=answer_from_context)
         lead.log(f"Recommended service: {lead.recommended_service}")
         print(f"  Recommended: {lead.recommended_service}")
 

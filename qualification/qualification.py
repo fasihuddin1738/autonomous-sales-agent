@@ -28,7 +28,7 @@ duplicate design work on the RAG hookup.
 from __future__ import annotations
 from typing import Callable, Optional
 
-from shared.schema import Lead, ICP, Qualification, DecisionMaker
+from shared.schema import Lead, ICP, Qualification, DecisionMaker, PipelineStage
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ def run_qualification(lead: Lead, icp: ICP) -> Qualification:
     score = max(0, min(100, score))
     is_qualified = score >= QUALIFICATION_THRESHOLD
 
-    # Build human-readable reasoning
+# Build human-readable reasoning
     verdict = "QUALIFIED" if is_qualified else "NOT QUALIFIED"
     reasoning = (
         f"{lead.company_name} scored {score}/100 — {verdict}. "
@@ -234,6 +234,10 @@ def run_qualification(lead: Lead, icp: ICP) -> Qualification:
             f" Score of {score} is below the {QUALIFICATION_THRESHOLD}-point "
             f"qualification threshold. Do not advance to outreach without a manual review."
         )
+
+    # Advance pipeline stage based on the qualification result
+    lead.pipeline_stage = PipelineStage.QUALIFIED if is_qualified else PipelineStage.NOT_QUALIFIED
+    lead.log(f"Pipeline stage updated to {lead.pipeline_stage}")
 
     return Qualification(
         score=score,
@@ -248,42 +252,34 @@ def match_service(
     rag_lookup: Optional[Callable[[str], str]] = None,
 ) -> str:
     """
-    Return the most appropriate NexaFlow service name for this lead.
-
-    If rag_lookup is provided (injected by the RAG teammate), call it with a
-    query string and use the returned snippet to determine the service.
-    Otherwise fall back to keyword matching against the internal catalog so
-    the module is usable in mock mode before the RAG branch is ready.
-
-    Returned string is always a key from _NEXAFLOW_CATALOG — never invented.
+    Return the most appropriate service name for this lead, grounded in
+    whatever company's knowledge base was ingested (via rag_lookup).
+    Works for ANY company PDF, not just NexaFlow — the service catalog
+    is discovered dynamically from RAG, never hardcoded.
     """
+    if rag_lookup is None:
+        # No RAG available at all (e.g. isolated unit test) — safest
+        # honest fallback is to say we can't determine this, not to
+        # guess a specific product name.
+        return "Unable to determine — no company knowledge base available"
+
     research_text = _research_text(lead)
+    top_signals = "; ".join(lead.research.buying_signals[:3]) or research_text[:300]
 
-    if rag_lookup is not None:
-        # Build a compact query from the top buying signals + industry
-        query = f"NexaFlow service for: {'; '.join(lead.research.buying_signals[:3])}"
-        snippet = rag_lookup(query)
-        # Match the snippet against the catalog keys
-        snippet_lower = snippet.lower()
-        for service_name in _NEXAFLOW_CATALOG:
-            if service_name.lower() in snippet_lower:
-                return service_name
-        # If RAG didn't name a known service, fall through to keyword matching
-        # rather than returning something invented.
+    # Ask RAG what services THIS company actually offers, grounded in
+    # its own ingested documents — nothing hardcoded here.
+    catalog_query = "What products or services does this company offer? List them."
+    catalog_snippet = rag_lookup(catalog_query)
 
-    # --- Keyword scoring fallback ---
-    service_scores: dict[str, int] = {s: 0 for s in _NEXAFLOW_CATALOG}
-    for service_name, keywords in _NEXAFLOW_CATALOG.items():
-        for kw in keywords:
-            if kw in research_text.lower():
-                service_scores[service_name] += 1
+    # Ask which of those services best fits this specific lead's situation
+    match_query = (
+        f"Given a prospective customer with this profile: {top_signals}. "
+        f"Which of the company's services (from: {catalog_snippet}) "
+        f"is the best fit? Respond with just the service name."
+    )
+    recommendation = rag_lookup(match_query)
 
-    best_service = max(service_scores, key=lambda s: service_scores[s])
-    if service_scores[best_service] == 0:
-        # No keyword hit at all — safe default for NexaFlow
-        return "WhatsApp AI Assistant"
-
-    return best_service
+    return recommendation.strip()
 
 
 def identify_decision_makers(lead: Lead) -> list[DecisionMaker]:

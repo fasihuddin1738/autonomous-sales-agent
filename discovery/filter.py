@@ -18,20 +18,16 @@ import sys
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from openai import OpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from shared.schema import ICP, Lead, PipelineStage
 from discovery.rate_limiter import groq_rate_limiter
+from discovery.rate_limiter import groq_rate_limiter
+from discovery.groq_client import call_groq_with_fallback
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
-
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
 
 FILTER_MODEL = "llama-3.1-8b-instant"
 MAX_RETRIES = 3
@@ -40,7 +36,7 @@ RETRY_BACKOFF_BASE = 5      # seconds — grows with each retry, only used on ac
 # How many filter calls run at once. Groq's free tier is generous enough
 # that this is safe — if you start seeing a lot of 429s in the terminal,
 # lower this to 3-5 rather than reintroducing a per-call sleep.
-MAX_WORKERS = 8
+MAX_WORKERS = 3
 
 
 def is_genuine_company(lead: Lead, icp: ICP) -> tuple[bool, str]:
@@ -75,7 +71,7 @@ Respond ONLY with valid JSON, no other text:
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             groq_rate_limiter.acquire()
-            response = client.chat.completions.create(
+            response = call_groq_with_fallback(
                 model=FILTER_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,

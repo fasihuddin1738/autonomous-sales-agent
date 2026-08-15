@@ -35,12 +35,15 @@ def call_llm(prompt: str) -> str:
     Swap the body of this function if the team standardizes on OpenAI later --
     nothing else in the module needs to change."""
     if config.LLM_PROVIDER == "openai":
-        # pyrefly: ignore [missing-import]
-        from openai import OpenAI
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
-        resp = client.chat.completions.create(
+        # Routes through the shared Groq fallback client (rotates across
+        # all available Groq keys) since this project runs Groq under an
+        # OpenAI-compatible base_url, not real OpenAI.
+        import sys, os
+        sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
+        from discovery.groq_client import call_groq_with_fallback
+
+        resp = call_groq_with_fallback(
             model=config.LLM_MODEL,
-            max_tokens=1000,
             messages=[
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},

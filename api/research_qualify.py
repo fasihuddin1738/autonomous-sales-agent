@@ -31,16 +31,17 @@ from qualification.qualification import (
     match_service,
     identify_decision_makers,
 )
-from rag.retrieve import retrieve_context
+from rag.retrieve import retrieve_context,answer_from_context
 from pipeline.lead_store import lead_store
 
 router = APIRouter()
 
 
 def _rag_lookup(query: str) -> str:
-    """Adapts retrieve_context (list[str]) into the single-string shape
-    match_service expects for its rag_lookup callable."""
-    return "\n".join(retrieve_context(query, top_k=3))
+    """Uses answer_from_context to get a synthesized, direct answer from
+    the ingested company knowledge base — grounded in whatever PDF was
+    uploaded, not hardcoded to any specific company."""
+    return answer_from_context(query, top_k=5)
 
 
 def _process_lead(lead: Lead, icp: ICP) -> Lead:

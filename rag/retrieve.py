@@ -2,6 +2,9 @@ import os
 import chromadb
 from openai import OpenAI
 from dotenv import load_dotenv
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from discovery.groq_client import call_groq_with_fallback
 
 load_dotenv()
 
@@ -58,6 +61,37 @@ def retrieve_context_with_sources(query: str, top_k: int = 5) -> list[dict]:
 
     return [{"text": doc, "source": meta.get("source"), "chunk_index": meta.get("chunk_index")}
             for doc, meta in zip(documents, metadatas)]
+
+def answer_from_context(query: str, top_k: int = 5) -> str:
+    """
+    Like retrieve_context, but synthesizes a direct natural-language
+    answer from the retrieved chunks using Groq (with automatic key
+    fallback), instead of returning raw chunk text. This is what other
+    modules should pass as rag_lookup when they need a single string
+    answer (e.g. qualification.match_service).
+    """
+    chunks = retrieve_context(query, top_k=top_k)
+    if not chunks:
+        return "No relevant information found in the company knowledge base."
+
+    context_text = "\n\n".join(chunks)
+
+    prompt = f"""Answer the question using ONLY the context below. Be concise and direct.
+If the context doesn't contain the answer, say so honestly.
+
+Context:
+{context_text}
+
+Question: {query}
+
+Answer:"""
+
+    response = call_groq_with_fallback(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+    )
+    return response.choices[0].message.content.strip()
 
 
 if __name__ == "__main__":

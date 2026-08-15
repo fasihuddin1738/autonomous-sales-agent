@@ -16,20 +16,17 @@ import os
 import sys
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from openai import OpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from shared.schema import ICP, Lead, PipelineStage
 from discovery.rate_limiter import groq_rate_limiter
+from discovery.rate_limiter import groq_rate_limiter
+from discovery.groq_client import call_groq_with_fallback
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1",
-)
 
 EXTRACT_MODEL = "llama-3.1-8b-instant"
 
@@ -58,12 +55,12 @@ Respond ONLY with valid JSON, no other text:
 
     try:
         groq_rate_limiter.acquire()
-        response = client.chat.completions.create(
-            model=EXTRACT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            timeout=30,
-        )
+        response = call_groq_with_fallback(
+                model=EXTRACT_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                timeout=30,
+            )
         raw = response.choices[0].message.content.strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
         result = json.loads(raw)
