@@ -52,7 +52,7 @@ def test_qualified_lead_metrocart() -> None:
 
     assert result.score >= 60, f"Expected MetroCart score >= 60, got {result.score}"
     assert result.is_qualified is True, "Expected MetroCart to be qualified"
-    print("  ✅ PASS")
+    print("  [PASS]")
 
 
 def test_not_qualified_lead_tinyco() -> None:
@@ -67,7 +67,7 @@ def test_not_qualified_lead_tinyco() -> None:
 
     assert result.score < 60, f"Expected TinyCo score < 60, got {result.score}"
     assert result.is_qualified is False, "Expected TinyCo to NOT be qualified"
-    print("  ✅ PASS")
+    print("  [PASS]")
 
 
 def test_service_matching_keyword_fallback() -> None:
@@ -82,7 +82,7 @@ def test_service_matching_keyword_fallback() -> None:
         assert service in _NEXAFLOW_CATALOG, (
             f"match_service returned '{service}' which is NOT in the NexaFlow catalog"
         )
-        print(f"  ✅ PASS")
+        print(f"  [PASS]")
 
 
 def test_service_matching_with_rag_lookup() -> None:
@@ -97,7 +97,7 @@ def test_service_matching_with_rag_lookup() -> None:
 
     print(f"\n[MetroCart + mock RAG] recommended_service='{service}'")
     assert service in _NEXAFLOW_CATALOG, f"'{service}' not in catalog"
-    print(f"  ✅ PASS")
+    print(f"  [PASS]")
 
 
 def test_identify_decision_makers() -> None:
@@ -115,7 +115,7 @@ def test_identify_decision_makers() -> None:
     priorities = [dm.priority for dm in dms]
     assert 1 in priorities, "Expected at least one priority=1 decision maker"
     assert len(dms) >= 2, "Expected at least 2 decision maker roles"
-    print("  ✅ PASS")
+    print("  [PASS]")
 
 
 def test_full_qualification_pipeline() -> None:
@@ -141,7 +141,7 @@ def test_full_qualification_pipeline() -> None:
         print(f"  Decision makers: {[dm.role for dm in dms]}")
 
     assert lead.qualification is not None
-    print("  ✅ PASS")
+    print("  [PASS]")
 
 
 # ---------------------------------------------------------------------------
@@ -165,18 +165,18 @@ def main() -> None:
             test_fn()
             passed += 1
         except AssertionError as e:
-            print(f"  ❌ FAIL — {test_fn.__name__}: {e}")
+            print(f"  [FAIL] {test_fn.__name__}: {e}")
             failed += 1
         except Exception as e:
-            print(f"  💥 ERROR — {test_fn.__name__}: {type(e).__name__}: {e}")
+            print(f"  [ERROR] {test_fn.__name__}: {type(e).__name__}: {e}")
             failed += 1
 
     print(f"\n{'='*50}")
     print(f"Results: {passed} passed, {failed} failed out of {len(tests)} tests")
     if failed == 0:
-        print("🎉 All qualification tests passed!")
+        print("ALL QUALIFICATION TESTS PASSED!")
     else:
-        print("⚠️  Some tests failed — check output above.")
+        print("SOME TESTS FAILED — check output above.")
 
 
 if __name__ == "__main__":
