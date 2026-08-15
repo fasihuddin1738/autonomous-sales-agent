@@ -1,0 +1,11 @@
+pydantic>=2.0
+python-dotenv
+httpx
+
+# Only one of these is actually needed depending on LLM_PROVIDER in .env,
+# both listed so `pip install -r` just works either way.
+anthropic
+openai
+
+fastapi
+uvicorn
