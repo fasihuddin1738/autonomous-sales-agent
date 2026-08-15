@@ -23,11 +23,11 @@ from shared.schema import ICP, Lead, PipelineStage
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 client = OpenAI(
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("GROQ_API_KEY"),
+    base_url="https://api.groq.com/openai/v1",
 )
 
-FILTER_MODEL = "openai/gpt-oss-20b:free"
+FILTER_MODEL = "llama-3.1-8b-instant"
 MAX_RETRIES = 3
 DELAY_BETWEEN_CALLS = 2.5   # seconds — keeps us under the free-tier rate limit
 RETRY_BACKOFF_BASE = 5      # seconds — grows with each retry
@@ -38,18 +38,26 @@ def is_genuine_company(lead: Lead, icp: ICP) -> tuple[bool, str]:
     Asks the LLM: is this a real, named company matching the ICP, or noise?
     Returns (keep: bool, reason: str). Retries on rate limits / connection errors.
     """
-    prompt = f"""You are filtering search results to find genuine companies for sales outreach.
+    website_line = f"URL: {lead.research.website}" if lead.research.website else "URL: not available (name extracted from a directory/listicle page)"
+
+    prompt = f"""You are filtering candidates to find genuine companies for sales outreach.
 
 ICP: industry="{icp.target_industry}", location="{icp.target_location}", special_focus="{icp.special_focus or 'none'}"
 
 Candidate:
 Title/Name: {lead.company_name}
-URL: {lead.research.website}
+{website_line}
 
-Is this the website of an ACTUAL, NAMED COMPANY that could be a sales prospect matching the ICP?
-Reject: directories, "Top N" listicles, blog posts, job listings, social media posts, marketing agencies
-(unless the agency itself matches the ICP), YouTube videos, unrelated content.
-Accept: a real company's own website/page.
+Is this the name of an ACTUAL, NAMED COMPANY that could be a sales prospect matching the ICP?
+If no URL is available, judge based on whether the NAME itself looks like a real, specific company
+(not a generic category, not a listicle title, not a person's name alone).
+
+Reject: directories, "Top N" listicles, blog posts, job listings, social media posts, YouTube videos,
+unrelated content, and digital marketing/SEO/advertising agencies that serve the target industry
+(they are vendors TO the industry, not companies IN it — reject these even if their name mentions
+the industry, e.g. "SEO for Real Estate" or "Real Estate Marketing Agency" are NOT real estate companies).
+
+Accept: a specific, real-sounding company that actually operates in the target industry.
 
 Respond ONLY with valid JSON, no other text:
 {{"keep": true or false, "reason": "one short sentence"}}"""

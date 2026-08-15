@@ -14,30 +14,50 @@ tavily_client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
 def build_search_queries(icp: ICP) -> list[str]:
     """
-    Turns an ICP into a handful of targeted search queries.
-    Multiple angled queries find more diverse candidates than one broad query.
+    Turns an ICP into a wider spread of search queries to increase yield.
+    Mixes direct company searches with 'best of' / listicle-style queries,
+    since listicles are actually rich sources once we extract names from them.
     """
-    base = f"{icp.target_industry} companies in {icp.target_location}"
-    queries = [base]
+    industry = icp.target_industry
+    location = icp.target_location
+
+    queries = [
+        f"{industry} companies in {location}",
+        f"best {industry} companies {location}",
+        f"top {industry} businesses in {location} 2026",
+        f"{industry} company {location} contact",
+        f"leading {industry} firms {location}",
+    ]
 
     if icp.special_focus:
-        queries.append(f"{base} with {icp.special_focus}")
-        queries.append(f"{icp.target_industry} businesses {icp.target_location} needing {icp.special_focus}")
+        queries.append(f"{industry} {location} {icp.special_focus}")
+        queries.append(f"{industry} businesses needing {icp.special_focus} {location}")
 
     if icp.company_size:
-        queries.append(f"{base} {icp.company_size}")
+        queries.append(f"{industry} {location} {icp.company_size}")
 
     return queries
 
 
 def discover_leads(icp: ICP, max_results_per_query: int = 5) -> list[Lead]:
     """
-    Runs Tavily searches based on the ICP and returns a deduplicated
-    list of candidate Lead objects (company_name + source only).
+    Convenience wrapper — returns just the Leads, discarding raw results.
+    Kept for backward compatibility with existing tests/scripts.
+    """
+    leads, _ = discover_leads_with_raw(icp, max_results_per_query=max_results_per_query)
+    return leads
+
+
+def discover_leads_with_raw(icp: ICP, max_results_per_query: int = 8) -> tuple[list[Lead], list[dict]]:
+    """
+    Same as discover_leads, but also returns the raw Tavily results
+    (with content) so directory/listicle pages can be mined for
+    individual company names later.
     """
     queries = build_search_queries(icp)
     seen_names = set()
     leads: list[Lead] = []
+    all_raw_results: list[dict] = []
 
     for query in queries:
         try:
@@ -45,16 +65,17 @@ def discover_leads(icp: ICP, max_results_per_query: int = 5) -> list[Lead]:
                 query=query,
                 search_depth="basic",
                 max_results=max_results_per_query,
+                include_raw_content=False,
             )
         except Exception as e:
             print(f"Tavily search failed for query '{query}': {e}")
             continue
 
         for result in response.get("results", []):
+            all_raw_results.append(result)
             company_name = extract_company_name(result)
             if not company_name or company_name.lower() in seen_names:
                 continue
-
             seen_names.add(company_name.lower())
             lead = Lead(
                 company_name=company_name,
@@ -65,7 +86,7 @@ def discover_leads(icp: ICP, max_results_per_query: int = 5) -> list[Lead]:
             lead.log(f"Discovered via query: '{query}'")
             leads.append(lead)
 
-    return leads
+    return leads, all_raw_results
 
 
 def extract_company_name(result: dict) -> str | None:
