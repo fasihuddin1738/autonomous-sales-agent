@@ -3,3 +3,4 @@ __pycache__/
 node_modules/
 *.pyc
 venv/
+antigravity-context-prompt.node_modules
