@@ -3,6 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# pyrefly: ignore [missing-import]
 import pytest
 
 from pipeline.stage_tracker import InvalidStageTransition, advance_stage, can_transition, is_terminal

@@ -56,6 +56,7 @@ def classify_keyword(reply_text: str) -> ResponseClassification:
 
 
 def classify_llm(reply_text: str) -> ResponseClassification:
+    # pyrefly: ignore [missing-import]
     import anthropic
 
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)

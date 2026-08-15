@@ -24,6 +24,7 @@ def _send_via_resend(to_email: str, subject: str, body: str) -> str:
     if not settings.RESEND_API_KEY:
         raise EmailSendError("RESEND_API_KEY is not set — cannot send real email.")
 
+    # pyrefly: ignore [missing-import]
     import resend
 
     resend.api_key = settings.RESEND_API_KEY

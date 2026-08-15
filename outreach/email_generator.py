@@ -68,6 +68,7 @@ def _build_user_prompt(lead: Lead, contact: DecisionMaker) -> str:
 
 
 def generate_email_llm(lead: Lead, contact: DecisionMaker) -> OutreachMessage:
+    # pyrefly: ignore [missing-import]
     import anthropic  # local import: only required on this code path
 
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)

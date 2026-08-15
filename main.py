@@ -8,6 +8,7 @@ Then hit POST /outreach/debug/seed-mock-leads to populate some test leads,
 and GET /outreach/leads to see them. Once merged, the team's main app should
 import `router` from api/routes.py directly instead of using this file.
 """
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
 
 from api.routes import router as outreach_router

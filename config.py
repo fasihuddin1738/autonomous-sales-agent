@@ -3,6 +3,7 @@ Central config for the outreach-pipeline module.
 Load once, import everywhere. Keep hackathon-simple: env vars + sane defaults.
 """
 import os
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 load_dotenv()

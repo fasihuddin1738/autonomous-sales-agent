@@ -122,6 +122,7 @@ def send_admin_briefing(lead: Lead, dry_run: bool = False) -> str:
     admin_email = settings.EMAIL_REPLY_TO or settings.EMAIL_FROM
 
     if not dry_run and settings.RESEND_API_KEY:
+        # pyrefly: ignore [missing-import]
         import resend
         resend.api_key = settings.RESEND_API_KEY
         resend.Emails.send({
