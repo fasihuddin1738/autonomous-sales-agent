@@ -4,3 +4,4 @@ node_modules/
 *.pyc
 venv/
 .agent
+antigravity-context-prompt.md
