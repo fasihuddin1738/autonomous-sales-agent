@@ -12,6 +12,7 @@ from __future__ import annotations
 from enum import Enum
 from datetime import datetime
 from typing import Optional
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, Field
 import uuid
 
