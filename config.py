@@ -15,6 +15,10 @@ class Settings:
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "outreach@nexaflow.ai")
     EMAIL_REPLY_TO: str = os.getenv("EMAIL_REPLY_TO", "")
 
+    # --- Email (Gmail SMTP fallback) ---
+    GMAIL_USER: str = os.getenv("GMAIL_USER", "")
+    GMAIL_APP_PASSWORD: str = os.getenv("GMAIL_APP_PASSWORD", "")
+
     # --- Follow-up timing ---
     FOLLOW_UP_DELAY_DAYS: int = int(os.getenv("FOLLOW_UP_DELAY_DAYS", "3"))
     MAX_FOLLOW_UPS: int = int(os.getenv("MAX_FOLLOW_UPS", "1"))  # Day 0 + 1 follow-up per spec

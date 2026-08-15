@@ -93,6 +93,160 @@ def make_qualified_lead_no_outreach() -> Lead:
     return lead
 
 
+def make_qualified_lead_thin_evidence() -> Lead:
+    """
+    Second Qualified lead, deliberately sparse research — tests that
+    email_generator produces a shorter, more general email instead of
+    padding with invented specifics when evidence is thin.
+    """
+    lead = Lead(
+        company_name="Brightline Dental Group",
+        source="ICP search: healthcare services, US, 20-50 employees",
+        icp_fit_notes="Matches target industry band; limited public info available.",
+        research=ResearchFindings(
+            website="https://brightlinedental.example.com",
+            employees_estimate="20-50",
+            key_departments=["Front Desk / Patient Coordination"],
+            recent_news=[],
+            funding_signal=None,
+            tech_stack=[],
+            buying_signals=[],
+            raw_notes="Small multi-location practice; little public signal beyond ICP fit.",
+        ),
+        qualification=Qualification(
+            score=58,
+            reasoning=(
+                "Fits ICP on industry and size, but no strong buying signal found yet. "
+                "Worth a light-touch outreach to gauge interest rather than a heavily "
+                "personalized pitch."
+            ),
+            factors=["ICP fit: healthcare services, 20-50 employees"],
+            is_qualified=True,
+        ),
+        recommended_service=NEXAFLOW_SERVICES[2],  # Internal Workflow Automation
+        decision_makers=[
+            DecisionMaker(
+                name="Dana Kim",
+                role="Practice Manager",
+                email="dana.kim@brightlinedental.example.com",
+                priority=1,
+            ),
+        ],
+        pipeline_stage=PipelineStage.QUALIFIED,
+    )
+    lead.log("Qualified by research/qualification pipeline (score 58, thin evidence).")
+    return lead
+
+
+def make_qualified_lead_no_contact_email() -> Lead:
+    """
+    Third Qualified lead, decision maker has no email on file — tests that
+    email_sender.send_email raises a clean EmailSendError instead of
+    crashing or silently failing.
+    """
+    lead = Lead(
+        company_name="Ironclad Manufacturing Co.",
+        source="ICP search: manufacturing, US, growing ops team",
+        icp_fit_notes="Strong ICP fit; contact found via LinkedIn only, no email yet.",
+        research=ResearchFindings(
+            website="https://ironcladmfg.example.com",
+            employees_estimate="150-200",
+            key_departments=["Operations", "Quality Control"],
+            recent_news=["Announced a new production line opening next quarter"],
+            funding_signal=None,
+            tech_stack=["SAP"],
+            buying_signals=["Posted 3 open roles for manual QC data entry in the last month"],
+            raw_notes="Contact identified via LinkedIn; email not yet found by discovery.",
+        ),
+        qualification=Qualification(
+            score=71,
+            reasoning=(
+                "Manufacturing company with manual QC data entry roles opening — strong "
+                "fit for document/data-entry automation. Missing verified contact email."
+            ),
+            factors=["ICP fit: manufacturing", "buying signal: manual QC data entry hiring"],
+            is_qualified=True,
+        ),
+        recommended_service=NEXAFLOW_SERVICES[4],  # AI-Powered Data Entry & Document Processing
+        decision_makers=[
+            DecisionMaker(
+                name="Marcus Webb",
+                role="VP of Operations",
+                email=None,  # deliberately missing — tests the error path
+                linkedin="https://linkedin.com/in/marcuswebb-example",
+                priority=1,
+            ),
+        ],
+        pipeline_stage=PipelineStage.QUALIFIED,
+    )
+    lead.log("Qualified by research/qualification pipeline (score 71, no email on file yet).")
+    return lead
+
+
+def make_qualified_lead_multiple_contacts() -> Lead:
+    """
+    Fourth Qualified lead, three decision makers with different priorities —
+    tests that generate_email() picks the priority-1 contact by default, and
+    gives the dashboard something to exercise the contact-selection path with.
+    """
+    lead = Lead(
+        company_name="Solstice Retail Group",
+        source="ICP search: multi-location retail, US, customer service scaling",
+        icp_fit_notes="Strong ICP fit; multiple relevant stakeholders identified.",
+        research=ResearchFindings(
+            website="https://solsticeretail.example.com",
+            employees_estimate="300-400",
+            key_departments=["Customer Service", "E-commerce Ops", "IT"],
+            recent_news=["Launched online ordering across all 40 store locations"],
+            funding_signal=None,
+            tech_stack=["Zendesk", "Shopify"],
+            buying_signals=[
+                "Customer service response times increased 3x since online ordering launched",
+                "Hiring for 'Customer Experience Automation Lead'",
+            ],
+            raw_notes="Rapid e-commerce growth is straining the support org.",
+        ),
+        qualification=Qualification(
+            score=85,
+            reasoning=(
+                "Excellent ICP fit: fast-growing retail e-commerce operation with a clear, "
+                "recent spike in support response times and an open role explicitly about "
+                "automating customer experience."
+            ),
+            factors=[
+                "ICP fit: retail, 300-400 employees",
+                "buying signal: response times tripled post-launch",
+                "buying signal: hiring a role literally titled Customer Experience Automation Lead",
+            ],
+            is_qualified=True,
+        ),
+        recommended_service=NEXAFLOW_SERVICES[0],  # AI Customer Support Automation
+        decision_makers=[
+            DecisionMaker(
+                name="Alicia Ferreira",
+                role="Director of Customer Experience",
+                email="alicia.ferreira@solsticeretail.example.com",
+                priority=1,
+            ),
+            DecisionMaker(
+                name="Ben Osei",
+                role="VP of E-commerce",
+                email="ben.osei@solsticeretail.example.com",
+                priority=2,
+            ),
+            DecisionMaker(
+                name="Rachel Tan",
+                role="IT Director",
+                email="rachel.tan@solsticeretail.example.com",
+                priority=3,
+            ),
+        ],
+        pipeline_stage=PipelineStage.QUALIFIED,
+    )
+    lead.log("Qualified by research/qualification pipeline (score 85).")
+    return lead
+
+
 def make_contacted_lead_awaiting_reply(days_since_sent: float = 1.5) -> Lead:
     """A lead that received Day-0 outreach and hasn't replied yet — not due for follow-up."""
     lead = make_qualified_lead_no_outreach()
@@ -166,6 +320,9 @@ def make_lead_with_meeting_scheduled() -> Lead:
 def all_mock_leads() -> list[Lead]:
     return [
         make_qualified_lead_no_outreach(),
+        make_qualified_lead_thin_evidence(),
+        make_qualified_lead_no_contact_email(),
+        make_qualified_lead_multiple_contacts(),
         make_contacted_lead_awaiting_reply(),
         make_lead_due_for_follow_up(),
         make_lead_with_positive_reply(),

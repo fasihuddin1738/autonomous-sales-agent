@@ -136,10 +136,14 @@ with col_b:
     unsent = [m for m in lead.outreach if m.status.value == "Drafted"]
     if unsent:
         if st.button(f"Send latest draft ({unsent[-1].subject[:30]}...)", key="send"):
-            send_email(lead, unsent[-1], dry_run=dry_run)
-            lead_store.save(lead)
-            st.success("Sent." if not dry_run else "Sent (dry run).")
-            st.rerun()
+            try:
+                from outreach.email_sender import EmailSendError
+                send_email(lead, unsent[-1], dry_run=dry_run)
+                lead_store.save(lead)
+                st.success("Sent." if not dry_run else "Sent (dry run).")
+                st.rerun()
+            except EmailSendError as e:
+                st.error(f"Could not send: {e}")
 
     st.divider()
     reply_text = st.text_area("Simulate inbound reply", key="reply_box")

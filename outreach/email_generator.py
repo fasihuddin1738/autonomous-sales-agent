@@ -39,7 +39,10 @@ Hard rules:
    a COO cares about cost and headcount efficiency).
 4. Keep it short: 80-130 words. One clear call to action (a quick call).
 5. No hype, no "revolutionize your business" language. Be specific and low-pressure.
-6. Return ONLY valid JSON, no markdown fences, no preamble, in this exact shape:
+6. FORMATTING: Write in proper, complete sentences. Each fact must end with a period \
+   before the next sentence begins. Never run two facts together without punctuation. \
+   The email must read naturally as a human would write it.
+7. Return ONLY valid JSON, no markdown fences, no preamble, in this exact shape:
 {"subject": "...", "body": "...", "evidence_used": ["fact 1", "fact 2"]}
 Where "evidence_used" lists the exact evidence-provided facts (verbatim or lightly \
 reworded) that you actually used in the email body — omit anything you didn't use."""
@@ -98,21 +101,31 @@ def generate_email_template(lead: Lead, contact: DecisionMaker) -> OutreachMessa
     news = lead.research.recent_news[:1]
     evidence_used: list[str] = []
 
-    hook_parts = []
-    if signals:
-        hook_parts.append(signals[0])
-        evidence_used.append(signals[0])
-    if news:
-        hook_parts.append(news[0])
-        evidence_used.append(news[0])
-    hook = " ".join(hook_parts) if hook_parts else f"{lead.company_name} is on our radar as a strong fit for teams like yours."
+    # Build a natural conversational opener from the evidence
+    signal = signals[0] if signals else None
+    news_item = news[0] if news else None
+
+    if signal:
+        evidence_used.append(signal)
+    if news_item:
+        evidence_used.append(news_item)
 
     service = lead.recommended_service or "an automation solution tailored to your workflow"
+
+    # Weave facts in naturally rather than dumping raw strings
+    if signal and news_item:
+        hook = f"Noticed that {signal.lower().rstrip('.')}. Also saw that {news_item.lower().rstrip('.')} — sounds like things are moving fast at {lead.company_name}."
+    elif signal:
+        hook = f"Noticed that {signal.lower().rstrip('.')} — caught our eye as a potential fit."
+    elif news_item:
+        hook = f"Saw that {news_item.lower().rstrip('.')} — congrats on the growth."
+    else:
+        hook = f"{lead.company_name} came up as a strong match for what we do."
 
     body = (
         f"Hi {first_name},\n\n"
         f"{hook} We work with companies like {lead.company_name} on {service.lower()}, "
-        f"and thought it might be worth a quick conversation given your role as {contact.role}.\n\n"
+        f"and thought it might be worth a quick chat given your role as {contact.role}.\n\n"
         "Open to a short call this week?\n\nBest,\nNexaFlow AI"
     )
     subject = f"Quick idea for {lead.company_name}'s {contact.role.lower()} workflow"

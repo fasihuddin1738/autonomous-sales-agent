@@ -19,6 +19,25 @@ class EmailSendError(Exception):
     pass
 
 
+def _send_via_gmail(to_email: str, subject: str, body: str) -> str:
+    """Send via Gmail SMTP using an App Password. No domain required."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = settings.GMAIL_USER
+    msg["To"] = to_email
+    if settings.EMAIL_REPLY_TO:
+        msg["Reply-To"] = settings.EMAIL_REPLY_TO
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(settings.GMAIL_USER, settings.GMAIL_APP_PASSWORD)
+        smtp.sendmail(settings.GMAIL_USER, [to_email], msg.as_string())
+
+    return f"gmail-smtp-{to_email}"
+
+
 def _send_via_resend(to_email: str, subject: str, body: str) -> str:
     """Returns the Resend message id. Raises EmailSendError on failure."""
     if not settings.RESEND_API_KEY:
@@ -41,6 +60,14 @@ def _send_via_resend(to_email: str, subject: str, body: str) -> str:
     return result.get("id", "") if isinstance(result, dict) else str(result)
 
 
+def _send_email_real(to_email: str, subject: str, body: str) -> str:
+    """Try Gmail SMTP first (no domain needed), fall back to Resend."""
+    if settings.GMAIL_USER and settings.GMAIL_APP_PASSWORD:
+        return _send_via_gmail(to_email, subject, body)
+    return _send_via_resend(to_email, subject, body)
+
+
+
 def send_email(lead: Lead, message: OutreachMessage, dry_run: bool = False) -> OutreachMessage:
     """
     Send `message` (must already be attached to lead.outreach, or will be
@@ -54,10 +81,11 @@ def send_email(lead: Lead, message: OutreachMessage, dry_run: bool = False) -> O
     if not message.contact.email:
         raise EmailSendError(f"No email address on file for contact {message.contact.role}.")
 
-    if dry_run or not settings.RESEND_API_KEY:
+    has_sender = bool(settings.GMAIL_USER and settings.GMAIL_APP_PASSWORD) or bool(settings.RESEND_API_KEY)
+    if dry_run or not has_sender:
         message_id = "dry-run"
     else:
-        message_id = _send_via_resend(message.contact.email, message.subject, message.body)
+        message_id = _send_email_real(message.contact.email, message.subject, message.body)
 
     message.status = OutreachStatus.SENT
     message.sent_at = datetime.now(timezone.utc)
