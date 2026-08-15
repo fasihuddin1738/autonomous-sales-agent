@@ -112,23 +112,33 @@ def generate_email_template(lead: Lead, contact: DecisionMaker) -> OutreachMessa
 
     service = lead.recommended_service or "an automation solution tailored to your workflow"
 
-    # Weave facts in naturally rather than dumping raw strings
+    def _clean_fact(text: str) -> str:
+        s = text.strip().rstrip(".")
+        if s and s[0].isupper():
+            s = s[0].lower() + s[1:]
+        return s
+
     if signal and news_item:
-        hook = f"Noticed that {signal.lower().rstrip('.')}. Also saw that {news_item.lower().rstrip('.')} — sounds like things are moving fast at {lead.company_name}."
+        hook = (
+            f"I noticed {lead.company_name} recently {_clean_fact(signal)}, "
+            f"and saw that you also {_clean_fact(news_item)}."
+        )
     elif signal:
-        hook = f"Noticed that {signal.lower().rstrip('.')} — caught our eye as a potential fit."
+        hook = f"I noticed that {lead.company_name} recently {_clean_fact(signal)}."
     elif news_item:
-        hook = f"Saw that {news_item.lower().rstrip('.')} — congrats on the growth."
+        hook = f"I saw that {lead.company_name} recently {_clean_fact(news_item)}."
     else:
-        hook = f"{lead.company_name} came up as a strong match for what we do."
+        hook = f"I've been following {lead.company_name}'s recent work."
 
     body = (
         f"Hi {first_name},\n\n"
-        f"{hook} We work with companies like {lead.company_name} on {service.lower()}, "
-        f"and thought it might be worth a quick chat given your role as {contact.role}.\n\n"
-        "Open to a short call this week?\n\nBest,\nNexaFlow AI"
+        f"{hook}\n\n"
+        f"We work with companies like {lead.company_name} on {service.lower()}, "
+        f"helping ops and leadership teams streamline repetitive tasks without adding headcount.\n\n"
+        f"Given your role as {contact.role}, would you be open to a brief 15-minute intro call this week?\n\n"
+        f"Best regards,\nNexaFlow AI Team"
     )
-    subject = f"Quick idea for {lead.company_name}'s {contact.role.lower()} workflow"
+    subject = f"Idea for {lead.company_name}'s {contact.role.lower()} workflow"
 
     return OutreachMessage(
         contact=contact,
@@ -153,8 +163,11 @@ def generate_email(lead: Lead, contact: Optional[DecisionMaker] = None) -> Outre
     if settings.ANTHROPIC_API_KEY:
         try:
             return generate_email_llm(lead, contact)
-        except Exception:
-            # Don't let a flaky API call block the pipeline mid-demo; fall back.
+        except Exception as e:
+            # Log the real error so it's visible in the terminal, then fall back.
+            import traceback
+            print(f"[email_generator] Claude failed, using template fallback. Error: {e}")
+            traceback.print_exc()
             return generate_email_template(lead, contact)
     return generate_email_template(lead, contact)
 

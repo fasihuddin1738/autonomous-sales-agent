@@ -31,7 +31,7 @@ class Settings:
 
     # --- LLM (for email generation / classification) ---
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "claude-3-5-sonnet-20241022")
 
 
 settings = Settings()
