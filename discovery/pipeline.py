@@ -12,7 +12,7 @@ from discovery.filter import filter_leads
 from discovery.extract_from_listings import expand_directory_leads
 
 
-def run_discovery(icp: ICP, max_results_per_query: int = 8) -> list[Lead]:
+def run_discovery(icp: ICP, max_results_per_query: int = 3) -> list[Lead]:
     print(f"Discovering leads for ICP: {icp.target_industry} in {icp.target_location}...")
     raw_leads, raw_results = discover_leads_with_raw(icp, max_results_per_query=max_results_per_query)
     print(f"Found {len(raw_leads)} raw candidates. Running cheap filter...")

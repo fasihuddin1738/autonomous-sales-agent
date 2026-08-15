@@ -14,14 +14,14 @@ Then open http://127.0.0.1:8000/docs for the interactive Swagger UI.
 from fastapi import FastAPI
 
 from api.discovery import router as discovery_router
-# from api.research import router as research_router        # teammate adds this
-# from api.outreach import router as outreach_router          # fasihuddin adds this
+from api.routes import router as outreach_router
+from api.research_qualify import router as research_router
 
 app = FastAPI(title="AgentHack — Autonomous Sales Agent API")
+app.include_router(research_router, prefix="/research", tags=["Research & Qualification"])
 
 app.include_router(discovery_router)
-# app.include_router(research_router)
-# app.include_router(outreach_router)
+app.include_router(outreach_router, prefix="/outreach", tags=["Outreach & Pipeline"])
 
 
 @app.get("/health")

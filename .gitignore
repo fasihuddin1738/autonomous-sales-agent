@@ -2,5 +2,7 @@
 __pycache__/
 node_modules/
 *.pyc
+*.db
 venv/
 antigravity-context-prompt.node_modules
+.agent/
