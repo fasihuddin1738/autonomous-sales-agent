@@ -60,6 +60,7 @@ export default function Header({
           <div className="flex items-center gap-2 flex-wrap">
             {loading ? (
               <button
+                type="button"
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer"
                 style={{
                   background: 'rgba(244,63,94,0.18)',

@@ -101,4 +101,5 @@ export interface ICP {
 export interface AgentLogEntry {
   timestamp: string;
   message: string;
+  kind: 'info' | 'error';
 }

@@ -18,9 +18,9 @@ const DEFAULT_ICP: ICP = {
   special_focus: 'High WhatsApp inquiry volume',
 };
 
-function addLog(logs: AgentLogEntry[], message: string): AgentLogEntry[] {
+function addLog(logs: AgentLogEntry[], message: string, kind: AgentLogEntry['kind'] = 'info'): AgentLogEntry[] {
   const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
-  return [...logs, { timestamp: ts, message }];
+  return [...logs, { timestamp: ts, message, kind }];
 }
 
 export default function App() {
@@ -36,9 +36,15 @@ export default function App() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Info log — appears in reasoning stream AND status bar
   const log = useCallback((msg: string) => {
-    setLogs(prev => addLog(prev, msg));
+    setLogs(prev => addLog(prev, msg, 'info'));
     setAgentStatus(msg);
+  }, []);
+
+  // Error log — appears ONLY in status bar, never in the reasoning stream
+  const logError = useCallback((msg: string) => {
+    setAgentStatus(`⚠ ${msg}`);
   }, []);
 
   // Fetch all leads
@@ -56,15 +62,16 @@ export default function App() {
   }, [fetchLeads]);
 
   // Stop running pipeline
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    // Tell the backend to skip any remaining steps (fire-and-forget)
+    api.cancelPipeline().catch(() => {});
     setLoading(false);
     log('Pipeline execution stopped by user.');
-    setAgentStatus('Idle — pipeline stopped');
-  };
+  }, [log]);
 
   // Seed mock data
   const handleSeedData = async () => {
@@ -72,10 +79,10 @@ export default function App() {
     setLoading(true);
     try {
       const res = await api.seedMockLeads();
-      log(`Seeded ${res.seeded} mock leads. Refreshing board...`);
+      log(`Seeded ${res.seeded} mock leads successfully. Refreshing board...`);
       await fetchLeads();
     } catch (e) {
-      log(`Seed failed: ${(e as Error).message}`);
+      logError(`Seed failed: ${(e as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -86,25 +93,60 @@ export default function App() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setLoading(true);
-    log(`Launching autonomous pipeline — ${icp.target_industry} in ${icp.target_location}...`);
     try {
-      log('Step 1/2: Discovering leads via NexaFlow discovery engine...');
+      await api.resetPipeline().catch(() => {});
+
+      if (mockMode) {
+        // ── Mock mode: skip real discovery & LLM calls entirely ──────────────
+        log('Mock mode ON — skipping live discovery. Loading pre-built mock leads...');
+        const res = await api.seedMockLeads();
+        log(`Seeded ${res.seeded} mock leads into the pipeline. Board updated.`);
+        await fetchLeads();
+        return;
+      }
+
+      // ── Live mode: real discovery + research pipeline ─────────────────────
+      log(`Launching autonomous pipeline — ${icp.target_industry} in ${icp.target_location}...`);
+      log(`ICP target: ${icp.target_industry} companies, ${icp.target_location}${icp.company_size ? `, ${icp.company_size}` : ''}`);
+      log('Step 1/2: Running discovery queries via NexaFlow search engine...');
       const discovered = await api.discoverLeads(
         { ...icp, max_results_per_query: 5 },
         controller.signal
       );
-      log(`Found ${discovered.count} raw leads. Starting deep research & qualification...`);
+      // If the proxy detected a disconnect, bail out cleanly
+      if (discovered.cancelled) {
+        log('Pipeline cancelled by user.');
+        return;
+      }
+      const rawCount = discovered.leads.length;
+      log(`Discovery complete. Found ${rawCount} candidate${rawCount !== 1 ? 's' : ''} that passed quality filter.`);
+      if (rawCount > 0) {
+        log(`Candidates: ${discovered.leads.slice(0, 5).map(l => l.company_name).join(', ')}${rawCount > 5 ? ` +${rawCount - 5} more` : ''}.`);
+      }
 
-      log('Step 2/2: Processing batch: research → qualify → service match → decision-maker ID...');
+      if (controller.signal.aborted) {
+        log('Pipeline cancelled before research step.');
+        return;
+      }
+
+      log('Step 2/2: Running deep research pipeline: tech stack → buying signals → qualification scoring → service match → decision-maker ID...');
       const processed = await api.processBatch(discovered.leads, icp, controller.signal);
-      log(`Pipeline complete. ${processed.qualified}/${processed.processed} leads qualified.`);
-
+      const notQualified = processed.processed - processed.qualified;
+      log(`Research & qualification complete.`);
+      log(`Qualified: ${processed.qualified}/${processed.processed} leads. Filtered out: ${notQualified} below threshold.`);
+      if (processed.qualified > 0) {
+        const qualifiedLeads = processed.leads.filter(l => l.qualification?.is_qualified);
+        qualifiedLeads.slice(0, 3).forEach(l => {
+          log(`  ✓ ${l.company_name} — score ${l.qualification?.score ?? '?'}/100, recommended: ${l.recommended_service ?? 'TBD'}`);
+        });
+      }
+      log('Pipeline complete. Board updated.');
       await fetchLeads();
     } catch (e: any) {
       if (e?.name === 'AbortError' || controller.signal.aborted) {
-        log('Pipeline cancelled.');
+        log('Pipeline cancelled by user.');
       } else {
-        log(`Pipeline error: ${e?.message || e}`);
+        logError(`Pipeline error: ${e?.message || e}`);
       }
     } finally {
       if (abortControllerRef.current === controller) {
@@ -116,13 +158,18 @@ export default function App() {
 
   // Follow-up scan
   const handleScanFollowUps = async () => {
-    log('Scanning for due follow-ups...');
+    log('Scanning all leads for due follow-ups...');
     try {
       const res = await api.scanFollowUps(dryRun);
-      log(`Follow-up scan done. ${res.follow_ups_sent.length} follow-up(s) sent.`);
+      if (res.follow_ups_sent.length === 0) {
+        log('Follow-up scan complete. No follow-ups due at this time.');
+      } else {
+        log(`Follow-up scan complete. ${res.follow_ups_sent.length} follow-up(s) dispatched${dryRun ? ' (dry-run)' : ''}.`);
+        res.follow_ups_sent.forEach(f => log(`  → Follow-up sent to: ${f.company_name}`));
+      }
       await fetchLeads();
     } catch (e) {
-      log(`Follow-up scan failed: ${(e as Error).message}`);
+      logError(`Follow-up scan failed: ${(e as Error).message}`);
     }
   };
 
@@ -151,21 +198,51 @@ export default function App() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setLoading(true);
-    log(`Updating ICP and scanning for leads: ${icp.target_industry}, ${icp.target_location}...`);
     try {
+      await api.resetPipeline().catch(() => {});
+
+      if (mockMode) {
+        // ── Mock mode: skip real discovery & LLM calls entirely ──────────────
+        log('Mock mode ON — skipping live discovery. Loading pre-built mock leads...');
+        const res = await api.seedMockLeads();
+        log(`Seeded ${res.seeded} mock leads into the pipeline. Board updated.`);
+        await fetchLeads();
+        return;
+      }
+
+      // ── Live mode ─────────────────────────────────────────────────────────
+      log(`ICP scan started — ${icp.target_industry} in ${icp.target_location}...`);
+      log(`Parameters: size=${icp.company_size ?? 'any'}, focus="${icp.special_focus ?? 'none'}".`);
+      log('Running discovery queries...');
       const discovered = await api.discoverLeads(
         { ...icp, max_results_per_query: 3 },
         controller.signal
       );
-      log(`Discovered ${discovered.count} leads. Running research batch...`);
+      // If the proxy detected a disconnect, bail out cleanly
+      if (discovered.cancelled) {
+        log('ICP scan cancelled by user.');
+        return;
+      }
+      const rawCount = discovered.leads.length;
+      log(`Found ${rawCount} candidate${rawCount !== 1 ? 's' : ''} that passed quality filter.`);
+      if (rawCount > 0) {
+        log(`Candidates: ${discovered.leads.slice(0, 4).map(l => l.company_name).join(', ')}${rawCount > 4 ? ` +${rawCount - 4} more` : ''}.`);
+      }
+
+      if (controller.signal.aborted) {
+        log('ICP scan cancelled before research step.');
+        return;
+      }
+
+      log('Running research & qualification batch...');
       const processed = await api.processBatch(discovered.leads, icp, controller.signal);
-      log(`ICP scan complete: ${processed.qualified}/${processed.processed} qualified.`);
+      log(`ICP scan complete — ${processed.qualified}/${processed.processed} leads qualified.`);
       await fetchLeads();
     } catch (e: any) {
       if (e?.name === 'AbortError' || controller.signal.aborted) {
-        log('ICP scan cancelled.');
+        log('ICP scan cancelled by user.');
       } else {
-        log(`ICP scan failed: ${e?.message || e}`);
+        logError(`ICP scan failed: ${e?.message || e}`);
       }
     } finally {
       if (abortControllerRef.current === controller) {

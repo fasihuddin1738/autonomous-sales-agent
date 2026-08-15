@@ -11,6 +11,9 @@ interface AgentReasoningPanelProps {
 export default function AgentReasoningPanel({ logs }: AgentReasoningPanelProps) {
   const [open, setOpen] = useState(false);
 
+  // Only show clean info logs — errors are shown in the status bar, not here
+  const infoLogs = logs.filter(e => e.kind === 'info');
+
   return (
     <div
       className="glass rounded-xl overflow-hidden"
@@ -44,7 +47,7 @@ export default function AgentReasoningPanel({ logs }: AgentReasoningPanelProps) 
               fontFamily: 'var(--font-mono)',
             }}
           >
-            {logs.length} steps
+            {infoLogs.length} steps
           </span>
         </div>
         {open ? (
@@ -68,12 +71,12 @@ export default function AgentReasoningPanel({ logs }: AgentReasoningPanelProps) 
               className="px-4 pb-4 flex flex-col gap-1.5 max-h-56 overflow-y-auto"
               style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
             >
-              {logs.length === 0 ? (
+              {infoLogs.length === 0 ? (
                 <p className="text-xs text-zinc-600 pt-3">
                   No agent activity yet. Launch the pipeline to see reasoning logs.
                 </p>
               ) : (
-                logs.map((entry, i) => (
+                infoLogs.map((entry, i) => (
                   <motion.div
                     key={i}
                     className="log-entry flex gap-2 items-start pt-2"
@@ -93,7 +96,7 @@ export default function AgentReasoningPanel({ logs }: AgentReasoningPanelProps) 
                     </span>
                     <span
                       className="text-xs leading-relaxed"
-                      style={{ color: '#a1a1aa' }}
+                      style={{ color: entry.message.startsWith('  ') ? '#71717a' : '#a1a1aa' }}
                     >
                       {entry.message}
                     </span>

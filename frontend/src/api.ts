@@ -19,7 +19,7 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
 
 // ── Discovery ────────────────────────────────────────────────────────────────
 export const discoverLeads = (icp: ICP & { max_results_per_query?: number }, signal?: AbortSignal) =>
-  req<{ count: number; leads: Lead[] }>('/discovery/discover', {
+  req<{ count: number; leads: Lead[]; cancelled?: boolean }>('/outreach/proxy-discover', {
     method: 'POST',
     body: JSON.stringify(icp),
     signal,
@@ -86,3 +86,9 @@ export const scanFollowUps = (dryRun: boolean) =>
     `/outreach/follow-ups/scan?dry_run=${dryRun}`,
     { method: 'POST' }
   );
+
+export const cancelPipeline = () =>
+  req<{ cancelled: boolean }>('/outreach/cancel-pipeline', { method: 'POST' });
+
+export const resetPipeline = () =>
+  req<{ reset: boolean }>('/outreach/reset-pipeline', { method: 'POST' });
