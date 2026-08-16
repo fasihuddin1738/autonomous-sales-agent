@@ -3,6 +3,9 @@ __pycache__/
 node_modules/
 *.pyc
 *.db
-venv/chroma_store/
+venv/
+chroma_store/
 nexaflow_dossier.pdf
 outreach_leads_response.json
+antigravity-context-prompt.node_modules
+.agent/
