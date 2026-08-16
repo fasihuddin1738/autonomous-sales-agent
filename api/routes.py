@@ -10,10 +10,14 @@ endpoints here.
 """
 from __future__ import annotations
 
+import asyncio
+import ctypes
+import threading
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+# pyrefly: ignore [missing-import]
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from outreach.email_generator import generate_email
@@ -30,6 +34,127 @@ from pipeline.stage_tracker import InvalidStageTransition, advance_stage
 from shared.schema import Lead, PipelineStage
 
 router = APIRouter()
+
+# ---------- Pipeline cancellation state ----------
+# _cancel_event: set by cancel-pipeline, cleared by reset-pipeline.
+# _discovery_state: holds a reference to the active discovery thread so
+#   cancel_pipeline() can inject SystemExit into it via ctypes, stopping
+#   retry loops and sleep delays as soon as Python re-enters the GIL.
+_cancel_event = threading.Event()
+_discovery_state: dict = {"thread": None}
+_thread_lock = threading.Lock()
+
+
+def _kill_thread(t: threading.Thread) -> None:
+    """
+    Best-effort forceful thread termination via async exception injection.
+    Raises SystemExit inside the target thread at the next Python bytecode
+    boundary. Interrupts time.sleep() delays immediately; HTTP calls finish
+    their current response before the exception fires (~1-5 s).
+    """
+    try:
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_ulong(t.ident),
+            ctypes.py_object(SystemExit),
+        )
+        if res > 1:
+            # Affected too many threads — undo
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                ctypes.c_ulong(t.ident), None
+            )
+    except Exception:
+        pass
+
+
+def pipeline_cancelled() -> bool:
+    return _cancel_event.is_set()
+
+
+@router.post("/cancel-pipeline")
+def cancel_pipeline():
+    """
+    Stop the running pipeline. Sets the cancel flag AND injects SystemExit
+    into the active discovery thread (if any), terminating retry loops and
+    sleep delays immediately without restarting the uvicorn process.
+    """
+    _cancel_event.set()
+    with _thread_lock:
+        t = _discovery_state.get("thread")
+        if t and t.is_alive():
+            _kill_thread(t)
+    return {"cancelled": True}
+
+
+@router.post("/reset-pipeline")
+def reset_pipeline():
+    """Clear the cancellation flag before starting a new pipeline run."""
+    _cancel_event.clear()
+    return {"reset": True}
+
+
+# ---------- Discovery proxy (cancellable) ----------
+
+class ProxyDiscoverRequest(BaseModel):
+    target_location: str
+    target_industry: str
+    company_size: str | None = None
+    special_focus: str | None = None
+    max_results_per_query: int = 5
+
+
+@router.post("/proxy-discover")
+async def proxy_discover(body: ProxyDiscoverRequest, request: Request):
+    """
+    Runs run_discovery() in a tracked daemon thread. When the user clicks Stop:
+      1. cancel-pipeline sets _cancel_event AND injects SystemExit into the thread
+      2. This endpoint detects _cancel_event within 0.5 s and returns cancelled
+      3. The thread receives SystemExit at the next Python bytecode boundary,
+         stopping retry delays (time.sleep) immediately and Groq calls after
+         the current HTTP response completes (~1-5 s).
+    """
+    from discovery.pipeline import run_discovery
+    from shared.schema import ICP as ICPSchema
+
+    icp = ICPSchema(
+        target_location=body.target_location,
+        target_industry=body.target_industry,
+        company_size=body.company_size,
+        special_focus=body.special_focus,
+    )
+
+    result_box: list = []
+    err_box: list = []
+
+    def _worker() -> None:
+        # Register this thread so cancel_pipeline() can kill it
+        with _thread_lock:
+            _discovery_state["thread"] = threading.current_thread()
+        try:
+            leads = run_discovery(icp, max_results_per_query=body.max_results_per_query)
+            result_box.append(leads)
+        except SystemExit:
+            pass  # Killed by cancel_pipeline() — clean exit
+        except Exception as e:
+            err_box.append(e)
+        finally:
+            with _thread_lock:
+                _discovery_state["thread"] = None
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+    # Poll every 0.5 s: return early if cancelled, otherwise wait for completion
+    while t.is_alive():
+        if _cancel_event.is_set():
+            _kill_thread(t)          # belt-and-suspenders in case cancel arrived
+            return {"count": 0, "leads": [], "cancelled": True}  # before kill_thread call
+        await asyncio.sleep(0.5)
+
+    if err_box:
+        raise HTTPException(status_code=500, detail=str(err_box[0]))
+
+    leads = result_box[0] if result_box else []
+    return {"count": len(leads), "leads": [lead.model_dump() for lead in leads]}
 
 
 # ---------- Leads ----------
